@@ -332,7 +332,7 @@ void ofxOculusDK2::setupEyeParams(ovrEyeType eye){
     
 	
 	///////////////////OLD WAY
-	headPose[eye] = ovrHmd_GetEyePose(hmd, eye);
+	headPose[eye] = ovrHmd_GetHmdPosePerEye(hmd, eye);
 
 	ofViewport(toOf(eyeRenderViewport[eye]));
 
@@ -372,7 +372,7 @@ void ofxOculusDK2::setupEyeParams(ovrEyeType eye){
 	
 	if(applyTranslation){
 		ofMatrix4x4 viewAdjust;
-		viewAdjust.makeTranslationMatrix( toOf(eyeRenderDesc[eye].ViewAdjust) );
+		viewAdjust.makeTranslationMatrix( toOf(eyeRenderDesc[eye].HmdToEyeViewOffset) );
 		ofMultMatrix(viewAdjust);
 	}
 
