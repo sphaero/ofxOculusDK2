@@ -252,12 +252,13 @@ bool ofxOculusDK2::setup(ofFbo::Settings& render_settings){
     eyeRenderViewport[1].Pos  = Vector2i((renderTargetSize.w + 1) / 2, 0);
     eyeRenderViewport[1].Size = eyeRenderViewport[0].Size;
 
-    unsigned int distortionCaps = ovrDistortionCap_Chromatic | ovrDistortionCap_TimeWarp | ovrDistortionCap_Vignette | ovrDistortionCap_Overdrive; // | ovrDistortionCap_SRGB;
+    unsigned int distortionCaps = ovrDistortionCap_Chromatic | ovrDistortionCap_TimeWarp | ovrDistortionCap_Vignette | ovrDistortionCap_Overdrive | ovrDistortionCap_SRGB;
     
 #if SDK_RENDER
     // END mattebb SDK rendering test
     ovrRenderAPIConfig config = ovrRenderAPIConfig();
     config.Header.API = ovrRenderAPI_OpenGL;
+    cout << "resolution " << hmd->Resolution.w << " -- " << hmd->Resolution.h << endl;
     config.Header.BackBufferSize = Sizei(hmd->Resolution.w, hmd->Resolution.h);
     config.Header.Multisample = 0; // configurable ?
     
@@ -282,7 +283,7 @@ bool ofxOculusDK2::setup(ofFbo::Settings& render_settings){
     cout << "eye tex 1 pos: " << EyeTexture[1].Header.RenderViewport.Pos.x << " " << EyeTexture[1].Header.RenderViewport.Pos.y << endl;
     cout << "eye tex 1 size: " << EyeTexture[1].Header.RenderViewport.Size.w << " " << EyeTexture[1].Header.RenderViewport.Size.h << endl;
     
-    int hmdCaps;
+    int hmdCaps=0;
     hmdCaps |= ovrHmdCap_DynamicPrediction;
     hmdCaps |= ovrHmdCap_LowPersistence;
     
@@ -421,14 +422,6 @@ ofRectangle ofxOculusDK2::getOculusViewport(){
 }
 
 void ofxOculusDK2::reloadShader(){
-    // XXX mattebb
-    /*
-     if(ofFile("Shaders_GL3/debug.vert").exists() && ofFile("Shaders_GL3/debug.frag").exists()){
-		cout << "** debug SHADERS loading from file" << endl;
-		debugShader.load("Shaders_GL3/debug");
-	}
-     */
-    
     
 	//this allows you to hack on the shader if you'd like
     if (ofIsGLProgrammableRenderer()) {
@@ -480,7 +473,7 @@ void ofxOculusDK2::beginOverlay(float overlayZ, float width, float height){
 	bUseOverlay = true;
 	overlayZDistance = overlayZ;
 	
-	if(overlayTarget.getWidth() != width || overlayTarget.getHeight() != height){
+	if((int)overlayTarget.getWidth() != (int)width || (int)overlayTarget.getHeight() != (int)height){
 		overlayTarget.allocate(width, height, GL_RGBA, 4);
 	}
 	
@@ -607,23 +600,20 @@ ofVec3f ofxOculusDK2::worldToScreen(ofVec3f worldPosition, bool considerHeadOrie
 
     ofRectangle viewport = getOculusViewport();
     
-    ofMatrix4x4 projectedLeft = getViewMatrix(ovrEye_Left) * getProjectionMatrix(ovrEye_Right);
+    //ofMatrix4x4 projectedLeft = getViewMatrix(ovrEye_Left) * getProjectionMatrix(ovrEye_Right);
     
-/*
+
     if (considerHeadOrientation) {
         // We'll combine both left and right eye projections to get a midpoint.
-//        OVR::Util::Render::StereoEyeParams eyeRenderParams = stereo.GetEyeRenderParams(OVR::Util::Render::StereoEye_Left);
-//        ofMatrix4x4 projectionMatrixLeft = toOf(eyeRenderParams.Projection);
-//        eyeRenderParams = stereo.GetEyeRenderParams(OVR::Util::Render::StereoEye_Right);
-//        ofMatrix4x4 projectionMatrixRight = toOf(eyeRenderParams.Projection);
+
 
         ofMatrix4x4 projectionMatrixLeft = toOf(ovrMatrix4f_Projection(eyeRenderDesc[ovrEye_Left].Fov, 0.01f, 10000.0f, true));
         ofMatrix4x4 projectionMatrixRight = toOf(ovrMatrix4f_Projection(eyeRenderDesc[ovrEye_Right].Fov, 0.01f, 10000.0f, true));
         
-        ofMatrix4x4 modelViewMatrix = orientationMatrix;
+        ofMatrix4x4 modelViewMatrix = getOrientationMat();
         modelViewMatrix = modelViewMatrix * baseCamera->getGlobalTransformMatrix();
-//        baseCamera->begin();
-//        baseCamera->end();
+        baseCamera->begin();
+        baseCamera->end();
         modelViewMatrix = modelViewMatrix.getInverse();
     
         ofVec3f cameraXYZ = worldPosition * (modelViewMatrix * projectionMatrixLeft);
@@ -631,12 +621,23 @@ ofVec3f ofxOculusDK2::worldToScreen(ofVec3f worldPosition, bool considerHeadOrie
 
         ofVec3f screenXYZ((cameraXYZ.x + 1.0f) / 2.0f * viewport.width + viewport.x,
                           (1.0f - cameraXYZ.y) / 2.0f * viewport.height + viewport.y,
-                          cameraXYZ.z);        
+                          cameraXYZ.z);
         return screenXYZ;
 
     }
-     */
+    
 	return baseCamera->worldToScreen(worldPosition, viewport);
+}
+
+ofMatrix4x4 ofxOculusDK2::getOrientationMat(){
+	
+	//return toOf(Matrix4f(pFusionResult->GetPredictedOrientation()));
+	
+	ovrTrackingState ts = ovrHmd_GetTrackingState(hmd, ovr_GetTimeInSeconds());
+	if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked)){
+		return toOf( Matrix4f(ts.HeadPose.ThePose.Orientation));
+	}
+    return ofMatrix4x4();
 }
 
 //TODO head orientation not considered
@@ -658,8 +659,8 @@ ofVec3f ofxOculusDK2::screenToOculus2D(ofVec3f screenPt, bool considerHeadOrient
 //  viewport.x -= viewport.width  / 2;
 //	viewport.y -= viewport.height / 2;
 	viewport.scaleFromCenter(oculusScreenSpaceScale);
-    return ofVec3f(ofMap(screenPt.x, 0, ofGetWidth(),  viewport.getMinX(), viewport.getMaxX()),
-                   ofMap(screenPt.y, 0, ofGetHeight(), viewport.getMinY(), viewport.getMaxY()),
+    return ofVec3f(ofMap(screenPt.x, 0, windowSize.w,  viewport.getMinX(), viewport.getMaxX()),
+                   ofMap(screenPt.y, 0, windowSize.h, viewport.getMinY(), viewport.getMaxY()),
                    screenPt.z);    
 }
 
@@ -706,8 +707,8 @@ void ofxOculusDK2::multBillboardMatrix(ofVec3f objectPosition, ofVec3f updirecti
 }
 ofVec2f ofxOculusDK2::gazePosition2D(){
     ofVec3f angles = getOrientationQuat().getEuler();
-	return ofVec2f(ofMap(angles.y, 90, -90, 0, ofGetWidth()),
-                   ofMap(angles.z, 90, -90, 0, ofGetHeight()));
+	return ofVec2f(ofMap(angles.y, 90, -90, 0, windowSize.w),
+                   ofMap(angles.z, 90, -90, 0, windowSize.h));
 }
 
 #if SDK_RENDER
@@ -743,42 +744,6 @@ void ofxOculusDK2::draw(){
 	if(!insideFrame) return;
 
 	ovr_WaitTillTime(frameTiming.TimewarpPointSeconds);
-
-//    ofPixels dp;
-//    renderTarget.readToPixels(dp);
-//    debugImage.setFromPixels(dp);
-//    debugImage.saveImage("debug.png");
-
-
-    /*
-    ofDisableDepthTest();
-    ofEnableAlphaBlending();
-	debugShader.begin();
-    debugShader.setUniformTexture("Texture", renderTarget.getTextureReference(), 1);
-    debugShader.setUniform2f("TextureScale",
-                  renderTarget.getTextureReference().getWidth(),
-                  renderTarget.getTextureReference().getHeight());
-    
-    debugMesh.clear();
-    float width = renderTargetSize.w;
-    float height = renderTargetSize.h;
-	//ofRectangle debugrect = ofRectangle(-width/2, -height/2,width,height);
-    ofRectangle debugrect = ofRectangle(100,100, width/2,height/2);
-	debugMesh.addVertex( ofVec3f(debugrect.getMinX(), debugrect.getMinY(), 100) );
-	debugMesh.addVertex( ofVec3f(debugrect.getMaxX(), debugrect.getMinY(), 100) );
-	debugMesh.addVertex( ofVec3f(debugrect.getMinX(), debugrect.getMaxY(), 100) );
-	debugMesh.addVertex( ofVec3f(debugrect.getMaxX(), debugrect.getMaxY(), 100) );
-    
-	debugMesh.addTexCoord( ofVec2f(0, height ) );
-	debugMesh.addTexCoord( ofVec2f(width, height) );
-	debugMesh.addTexCoord( ofVec2f(0, 0) );
-	debugMesh.addTexCoord( ofVec2f(width, 0) );
-	
-	debugMesh.setMode(OF_PRIMITIVE_TRIANGLE_STRIP);
-    debugMesh.draw();
-    
-    debugShader.end();
-    */
    
 	///JG START HERE 
 	// Prepare for distortion rendering. 
@@ -816,6 +781,10 @@ void ofxOculusDK2::draw(){
 	insideFrame = false;
 }
 #endif
+
+void ofxOculusDK2::dismissSafetyWarning(void) {
+    ovrHmd_DismissHSWDisplay(hmd);
+}
 
 void ofxOculusDK2::setUsePredictedOrientation(bool usePredicted){
 	bUsePredictedOrientation = usePredicted;
