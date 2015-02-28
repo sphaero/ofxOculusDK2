@@ -70,6 +70,7 @@ class ofxOculusDK2
 
 	ofQuaternion getOrientationQuat();
 	ofMatrix4x4 getOrientationMat();
+    ofVec3f getTranslation();
 	
 	//default 1 has more constrained mouse movement,
 	//while turning it up increases the reach of the mouse
@@ -138,11 +139,15 @@ class ofxOculusDK2
 	ofVboMesh			eyeMesh[2];
 	ovrPosef headPose[2];
 	ovrFrameTiming frameTiming;// = ovrHmd_BeginFrameTiming(hmd, 0);
+    unsigned int frameIndex;
+    
+    ovrVector3f hmdToEyeViewOffsets[2];
 
 	void initializeClientRenderer();
 
     Sizei               windowSize;
     
+
 	OVR::Util::Render::StereoConfig stereo;
 	float renderScale;
 	ofMesh overlayMesh;
@@ -156,9 +161,16 @@ class ofxOculusDK2
     ofFbo backgroundTarget;
 	ofFbo overlayTarget;
 	ofShader distortionShader;
-
+    
+    ofShader debugShader;   // XXX mattebb
+    ofMesh debugMesh;
+    ofImage debugImage;
+    
 	void setupEyeParams(ovrEyeType eye);
 	void setupShaderUniforms(ovrEyeType eye);
+    
+    ofMatrix4x4 getProjectionMatrix(ovrEyeType eye);
+    ofMatrix4x4 getViewMatrix(ovrEyeType eye);
 	
 	void renderOverlay();
 };
